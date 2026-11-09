@@ -1,0 +1,19 @@
+{
+  "name": "portalverify",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "observability": { "enabled": true },
+  "rules": [
+    { "type": "Text", "globs": ["**/*.html"], "fallthrough": true }
+  ],
+  "vars": {
+    "BASE": "https://portalverify.TON-SOUS-DOMAINE.workers.dev",
+    "CLIENT_ID": "TON_CLIENT_ID"
+  },
+  "kv_namespaces": [
+    { "binding": "KV", "id": "ID_DU_NAMESPACE" }
+  ],
+  "triggers": {
+    "crons": ["0 4 * * *"]
+  }
+}
